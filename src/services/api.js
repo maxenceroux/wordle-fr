@@ -32,41 +32,82 @@ class ApiService {
     }
   }
 
-  // Get word of the day
-  async getWordOfDay(date) {
-    return this.request(`/word-of-day/${date}`);
-  }
+  // ===== COMMUNITY METHODS =====
 
-  // Set word of the day
-  async setWordOfDay(date, word) {
-    return this.request("/word-of-day", {
+  // Create a new community
+  async createCommunity(name, createdBy) {
+    return this.request("/communities", {
       method: "POST",
-      body: JSON.stringify({ date, word }),
+      body: JSON.stringify({ name, createdBy }),
     });
   }
 
+  // Get community by code
+  async getCommunityByCode(code) {
+    return this.request(`/communities/${code}`);
+  }
+
+  // Join a community
+  async joinCommunity(code, username) {
+    return this.request(`/communities/${code}/join`, {
+      method: "POST",
+      body: JSON.stringify({ username }),
+    });
+  }
+
+  // Get community members
+  async getCommunityMembers(code) {
+    return this.request(`/communities/${code}/members`);
+  }
+
+  // Get communities for a user
+  async getUserCommunities(username) {
+    return this.request(`/users/${username}/communities`);
+  }
+
+  // ===== WORD OF THE DAY METHODS =====
+
+  // Get word of the day
+  async getWordOfDay(date, communityId = null) {
+    const communityParam = communityId ? `?communityId=${communityId}` : "";
+    return this.request(`/word-of-day/${date}${communityParam}`);
+  }
+
+  // Set word of the day
+  async setWordOfDay(date, word, communityId = null) {
+    return this.request("/word-of-day", {
+      method: "POST",
+      body: JSON.stringify({ date, word, communityId }),
+    });
+  }
+
+  // ===== SCORE METHODS =====
+
   // Save a score
-  async saveScore(username, word, tries, timeTaken, date) {
+  async saveScore(username, word, tries, timeTaken, date, communityId = null) {
     return this.request("/scores", {
       method: "POST",
-      body: JSON.stringify({ username, word, tries, timeTaken, date }),
+      body: JSON.stringify({ username, word, tries, timeTaken, date, communityId }),
     });
   }
 
   // Get scores for a user
-  async getUserScores(username, limit = 10) {
-    return this.request(`/scores/${username}?limit=${limit}`);
+  async getUserScores(username, limit = 10, communityId = null) {
+    const communityParam = communityId ? `&communityId=${communityId}` : "";
+    return this.request(`/scores/${username}?limit=${limit}${communityParam}`);
   }
 
   // Get leaderboard
-  async getLeaderboard(limit = 20, date = null) {
+  async getLeaderboard(limit = 20, date = null, communityId = null) {
     const dateParam = date ? `&date=${date}` : "";
-    return this.request(`/leaderboard?limit=${limit}${dateParam}`);
+    const communityParam = communityId ? `&communityId=${communityId}` : "";
+    return this.request(`/leaderboard?limit=${limit}${dateParam}${communityParam}`);
   }
 
   // Get stats for a date
-  async getStatsForDate(date) {
-    return this.request(`/stats/${date}`);
+  async getStatsForDate(date, communityId = null) {
+    const communityParam = communityId ? `?communityId=${communityId}` : "";
+    return this.request(`/stats/${date}${communityParam}`);
   }
 
   // Health check
