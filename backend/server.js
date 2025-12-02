@@ -15,6 +15,12 @@ app.use(bodyParser.json());
 const dbPath = process.env.DB_PATH || path.join(__dirname, "data", "wordle.db");
 const db = new Database(dbPath);
 
+// Function to check if column exists
+function columnExists(tableName, columnName) {
+  const result = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  return result.some((col) => col.name === columnName);
+}
+
 // Create tables if they don't exist
 db.exec(`
   CREATE TABLE IF NOT EXISTS communities (
@@ -41,20 +47,34 @@ db.exec(`
     tries INTEGER NOT NULL,
     time_taken INTEGER NOT NULL,
     date TEXT NOT NULL,
-    community_id INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (community_id) REFERENCES communities(id)
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS word_of_day (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL,
     word TEXT NOT NULL,
-    community_id INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (community_id) REFERENCES communities(id)
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+`);
 
+// Add community_id columns if they don't exist (migration)
+if (!columnExists("scores", "community_id")) {
+  console.log("Migrating scores table: adding community_id column...");
+  db.exec(
+    `ALTER TABLE scores ADD COLUMN community_id INTEGER REFERENCES communities(id);`
+  );
+}
+
+if (!columnExists("word_of_day", "community_id")) {
+  console.log("Migrating word_of_day table: adding community_id column...");
+  db.exec(
+    `ALTER TABLE word_of_day ADD COLUMN community_id INTEGER REFERENCES communities(id);`
+  );
+}
+
+// Create indexes
+db.exec(`
   CREATE INDEX IF NOT EXISTS idx_communities_code ON communities(code);
   CREATE INDEX IF NOT EXISTS idx_community_members_community ON community_members(community_id);
   CREATE INDEX IF NOT EXISTS idx_community_members_username ON community_members(username);
@@ -65,11 +85,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_word_of_day_community ON word_of_day(community_id);
 `);
 
-// Create unique index for word_of_day (date + community_id combination)
-db.exec(`
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_word_of_day_date_community 
-  ON word_of_day(date, community_id);
-`);
+// Drop old unique constraint on word_of_day if exists, then create new one
+try {
+  db.exec(`DROP INDEX IF EXISTS idx_word_of_day_date;`);
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_word_of_day_date_community 
+    ON word_of_day(date, community_id);
+  `);
+} catch (error) {
+  console.log(
+    "Note: Could not update word_of_day unique index (may already exist)"
+  );
+}
 
 // Helper function to generate unique community code
 function generateCommunityCode() {

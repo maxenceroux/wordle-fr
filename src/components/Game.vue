@@ -3,6 +3,9 @@
         <header>
             <div class="header-container">
                 <div class="header-left">
+                    <div class="icon-btn community" :class="{ pressed: activeCommunityId }" @click="communityOpened = true" title="Communautés">
+                        <img class="icon" src="/icons/people.svg" alt="Communautés" />
+                    </div>
                     <div class="icon-btn archives" :class="{ pressed: archivesMode, nopin: visitedArchives }" @click="switchArchivesMode" title="Archives">
                         <img class="icon" src="/icons/archive.svg" alt="Archives" />
                     </div>
@@ -18,6 +21,10 @@
                         <div class="letter partial">M</div>
                         <div class="letter incorrect">O</div>
                         <div class="letter incorrect">T</div>
+                    </div>
+                    <div class="community-badge" v-if="activeCommunityName">
+                        <img class="icon" src="/icons/people.svg" alt="Communauté" />
+                        {{ activeCommunityName }}
                     </div>
                 </div>
                 <div class="archives-selector" v-if="archivesMode">
@@ -50,6 +57,14 @@
         <main>
             <transition name="fade">
                 <div class="error" v-if="error">{{ error }}</div>
+            </transition>
+            <transition name="fadeup">
+                <div class="community-toast" v-if="showCommunityToast">
+                    <div class="toast-icon">
+                        <img class="icon" src="/icons/people.svg" alt="Communauté" />
+                    </div>
+                    <div class="toast-message">{{ communityToast }}</div>
+                </div>
             </transition>
             <div class="grid">
                 <div class="attempt" v-for="attempt, indexA in attempts" :key="indexA" :class="{ shake: error && indexA === currentAttempt - 1 }">
@@ -380,6 +395,89 @@
                     </div>
                 </div>
             </transition>
+            <transition name="fadeup">
+                <div class="community-modal" v-if="communityOpened">
+                    <div class="modal-backdrop" @click="communityOpened = false"></div>
+                    <div class="community-modal-content">
+                        <div class="close-btn" @click="communityOpened = false">
+                            <img class="icon" src="/icons/close.svg" alt="Fermer" />
+                        </div>
+                        <h2>Communautés</h2>
+                        
+                        <!-- Active Community Display -->
+                        <div class="active-community-section" v-if="activeCommunityId">
+                            <div class="community-card active">
+                                <div class="community-header">
+                                    <img class="icon" src="/icons/people.svg" alt="Communauté" />
+                                    <h3>{{ activeCommunityName }}</h3>
+                                </div>
+                                <div class="community-info">
+                                    <p class="community-code">Code: <strong>{{ activeCommunityCode }}</strong></p>
+                                </div>
+                                <div class="community-actions">
+                                    <div class="btn share-btn" @click="shareCommunity">
+                                        <img class="icon" src="/icons/copy.svg" />
+                                        <p>{{ communityLinkCopied ? 'Copié !' : 'Partager' }}</p>
+                                    </div>
+                                    <div class="btn leave-btn" @click="leaveCommunity">
+                                        <p>Quitter</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Join Community Section -->
+                        <div class="join-community-section">
+                            <h3>{{ activeCommunityId ? 'Rejoindre une autre' : 'Rejoindre une communauté' }}</h3>
+                            <div class="input-group">
+                                <input 
+                                    v-model="joinCommunityCode" 
+                                    type="text" 
+                                    placeholder="Code de la communauté" 
+                                    maxlength="6"
+                                    @input="joinCommunityCode = joinCommunityCode.toUpperCase()"
+                                />
+                                <div class="btn join-btn" @click="joinCommunityByCode" :class="{ disabled: !joinCommunityCode }">
+                                    <p>Rejoindre</p>
+                                </div>
+                            </div>
+                            <p class="help-text" v-if="joinCommunityError" style="color: #E21C46; margin-top: 8px;">{{ joinCommunityError }}</p>
+                        </div>
+
+                        <!-- Create Community Section -->
+                        <div class="create-community-section">
+                            <h3>Créer une communauté</h3>
+                            <div class="input-group" v-if="!showCreateForm">
+                                <div class="btn create-btn" @click="showCreateForm = true">
+                                    <img class="icon" src="/icons/people.svg" />
+                                    <p>Nouvelle communauté</p>
+                                </div>
+                            </div>
+                            <div class="create-form" v-if="showCreateForm">
+                                <input 
+                                    v-model="newCommunityName" 
+                                    type="text" 
+                                    placeholder="Nom de la communauté" 
+                                    maxlength="30"
+                                />
+                                <div class="form-actions">
+                                    <div class="btn cancel-btn" @click="cancelCreate">
+                                        <p>Annuler</p>
+                                    </div>
+                                    <div class="btn create-submit-btn" @click="createCommunity" :class="{ disabled: !newCommunityName }">
+                                        <p>Créer</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help-text" v-if="createCommunityError" style="color: #E21C46; margin-top: 8px;">{{ createCommunityError }}</p>
+                        </div>
+
+                        <div class="community-help">
+                            <p>Les communautés vous permettent de jouer avec vos amis sur un mot unique chaque jour.</p>
+                        </div>
+                    </div>
+                </div>
+            </transition>
         </main>
     </div>
 </template>
@@ -501,6 +599,15 @@ export default {
             activeCommunityId: null,
             activeCommunityCode: null,
             activeCommunityName: null,
+            communityOpened: false,
+            showCreateForm: false,
+            newCommunityName: '',
+            joinCommunityCode: '',
+            communityLinkCopied: false,
+            createCommunityError: '',
+            joinCommunityError: '',
+            communityToast: '',
+            showCommunityToast: false,
         }
     },
     async mounted() {
@@ -1240,6 +1347,205 @@ export default {
                 localStorage.removeItem('activeCommunityCode');
                 localStorage.removeItem('activeCommunityName');
             }
+        },
+        async createCommunity() {
+            if (!this.newCommunityName || !this.newCommunityName.trim()) {
+                this.createCommunityError = 'Veuillez entrer un nom';
+                return;
+            }
+
+            try {
+                const username = await this.promptForUsername();
+                if (!username) {
+                    this.createCommunityError = 'Nom d\'utilisateur requis';
+                    return;
+                }
+
+                const response = await ApiService.createCommunity(this.newCommunityName.trim(), username);
+                const community = response.community;
+
+                // Set as active community
+                this.activeCommunityId = community.id;
+                this.activeCommunityCode = community.code;
+                this.activeCommunityName = community.name;
+
+                // Save to localStorage
+                localStorage.setItem('activeCommunityId', community.id);
+                localStorage.setItem('activeCommunityCode', community.code);
+                localStorage.setItem('activeCommunityName', community.name);
+
+                // Reset form
+                this.newCommunityName = '';
+                this.showCreateForm = false;
+                this.createCommunityError = '';
+
+                // Close modal first
+                this.communityOpened = false;
+
+                // Clear localStorage game data for fresh start
+                localStorage.removeItem('lastSave');
+                localStorage.removeItem('attempts');
+                localStorage.removeItem('results');
+                localStorage.removeItem('currentAttempt');
+                localStorage.removeItem('correctLetters');
+                localStorage.removeItem('partialLetters');
+                localStorage.removeItem('incorrectLetters');
+                localStorage.removeItem('won');
+                localStorage.removeItem('finished');
+
+                // Refresh word and reset game state completely
+                await this.getWordOfTheDay();
+                this.resetGridData();
+                this.gameStartTime = Date.now();
+                
+                // Show success toast
+                this.showCommunityToastMessage(`Communauté "${community.name}" créée !\nCode: ${community.code}`);
+            } catch (error) {
+                console.error('Failed to create community:', error);
+                this.createCommunityError = 'Erreur lors de la création';
+            }
+        },
+        async joinCommunityByCode() {
+            if (!this.joinCommunityCode || this.joinCommunityCode.length !== 6) {
+                this.joinCommunityError = 'Code invalide (6 caractères requis)';
+                return;
+            }
+
+            try {
+                const username = await this.promptForUsername();
+                if (!username) {
+                    this.joinCommunityError = 'Nom d\'utilisateur requis';
+                    return;
+                }
+
+                // Get community details
+                const response = await ApiService.getCommunityByCode(this.joinCommunityCode);
+                const community = response.community;
+
+                // Join the community
+                await ApiService.joinCommunity(this.joinCommunityCode, username);
+
+                // Set as active community
+                this.activeCommunityId = community.id;
+                this.activeCommunityCode = community.code;
+                this.activeCommunityName = community.name;
+
+                // Save to localStorage
+                localStorage.setItem('activeCommunityId', community.id);
+                localStorage.setItem('activeCommunityCode', community.code);
+                localStorage.setItem('activeCommunityName', community.name);
+
+                // Reset form
+                this.joinCommunityCode = '';
+                this.joinCommunityError = '';
+
+                // Close modal first
+                this.communityOpened = false;
+
+                // Clear localStorage game data for fresh start
+                localStorage.removeItem('lastSave');
+                localStorage.removeItem('attempts');
+                localStorage.removeItem('results');
+                localStorage.removeItem('currentAttempt');
+                localStorage.removeItem('correctLetters');
+                localStorage.removeItem('partialLetters');
+                localStorage.removeItem('incorrectLetters');
+                localStorage.removeItem('won');
+                localStorage.removeItem('finished');
+
+                // Refresh word and reset game state completely
+                await this.getWordOfTheDay();
+                this.resetGridData();
+                this.gameStartTime = Date.now();
+
+                this.showCommunityToastMessage(`Vous avez rejoint "${community.name}" !`);
+            } catch (error) {
+                console.error('Failed to join community:', error);
+                this.joinCommunityError = 'Communauté introuvable';
+            }
+        },
+        async leaveCommunity() {
+            if (!confirm('Voulez-vous vraiment quitter cette communauté ?')) {
+                return;
+            }
+
+            // Clear community data
+            this.activeCommunityId = null;
+            this.activeCommunityCode = null;
+            this.activeCommunityName = null;
+
+            // Remove from localStorage
+            localStorage.removeItem('activeCommunityId');
+            localStorage.removeItem('activeCommunityCode');
+            localStorage.removeItem('activeCommunityName');
+
+            // Clear localStorage game data for fresh start
+            localStorage.removeItem('lastSave');
+            localStorage.removeItem('attempts');
+            localStorage.removeItem('results');
+            localStorage.removeItem('currentAttempt');
+            localStorage.removeItem('correctLetters');
+            localStorage.removeItem('partialLetters');
+            localStorage.removeItem('incorrectLetters');
+            localStorage.removeItem('won');
+            localStorage.removeItem('finished');
+
+            // Close modal
+            this.communityOpened = false;
+
+            // Refresh word and reset game state completely
+            await this.getWordOfTheDay();
+            this.resetGridData();
+            this.gameStartTime = Date.now();
+        },
+        shareCommunity() {
+            if (!this.activeCommunityCode) return;
+
+            const shareUrl = `${window.location.origin}/?c=${this.activeCommunityCode}`;
+            const shareText = `Rejoignez ma communauté "${this.activeCommunityName}" sur Le Mot !`;
+
+            // Try native share API first
+            if (navigator.share && this.webShare) {
+                navigator.share({
+                    title: 'Le Mot - Communauté',
+                    text: shareText,
+                    url: shareUrl
+                }).then(() => {
+                    this.communityLinkCopied = true;
+                    setTimeout(() => (this.communityLinkCopied = false), 3000);
+                }).catch(() => {
+                    // Fallback to clipboard
+                    this.copyToClipboard(shareUrl);
+                });
+            } else {
+                // Fallback to clipboard
+                this.copyToClipboard(shareUrl);
+            }
+        },
+        async copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                this.communityLinkCopied = true;
+                setTimeout(() => (this.communityLinkCopied = false), 3000);
+            } catch (error) {
+                console.error('Failed to copy:', error);
+                // Fallback using textarea
+                this.saveToClipboard(text);
+                this.communityLinkCopied = true;
+                setTimeout(() => (this.communityLinkCopied = false), 3000);
+            }
+        },
+        cancelCreate() {
+            this.showCreateForm = false;
+            this.newCommunityName = '';
+            this.createCommunityError = '';
+        },
+        showCommunityToastMessage(message) {
+            this.communityToast = message;
+            this.showCommunityToast = true;
+            setTimeout(() => {
+                this.showCommunityToast = false;
+            }, 4000);
         }
     }
 }
@@ -1447,6 +1753,49 @@ export default {
             font-size: 18px
             font-weight: bold
             z-index: 10
+        .community-toast
+            top: 70px
+            position: absolute
+            background: #1D1D20
+            border: 2px solid #3EAA42
+            color: white
+            padding: 16px 20px
+            border-radius: 12px
+            font-size: 14px
+            font-weight: 600
+            z-index: 10
+            display: flex
+            align-items: center
+            gap: 12px
+            max-width: 90%
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3)
+            @media (max-width: 512px)
+                top: 60px
+                font-size: 13px
+                padding: 12px 16px
+            .toast-icon
+                display: flex
+                align-items: center
+                justify-content: center
+                width: 32px
+                height: 32px
+                background: #3EAA42
+                border-radius: 50%
+                flex-shrink: 0
+                @media (max-width: 512px)
+                    width: 28px
+                    height: 28px
+                .icon
+                    height: 16px
+                    filter: brightness(0) invert(1)
+                    @media (max-width: 512px)
+                        height: 14px
+            .toast-message
+                flex: 1
+                line-height: 1.4
+                white-space: pre-line
+                @media (max-width: 512px)
+                    font-size: 12px
         .grid
             margin-top: auto
             margin-bottom: auto
@@ -2211,8 +2560,287 @@ export default {
                             &:active
                                 background-color: #157D19
                                 border-color: #157D19
+        .community-modal
+            position: fixed
+            display: flex
+            width: 100vw
+            height: 100vh
+            justify-content: center
+            align-items: center
+            background: rgba(0, 0, 0, 0.7)
+            top: 0
+            left: 0
+            z-index: 10
+            .community-modal-content
+                position: relative
+                display: flex
+                align-items: flex-start
+                flex-direction: column
+                max-width: 450px
+                width: 90%
+                max-height: 90%
+                box-sizing: border-box
+                padding: 24px
+                background: #1D1D20
+                border-radius: 8px
+                overflow-y: auto
+                scrollbar-width: thin
+                scrollbar-color: #d2d2d280 #fff0
+                &::-webkit-scrollbar
+                    -webkit-appearance: none
+                    width: 4px
+                &::-webkit-scrollbar-thumb
+                    border-radius: 4px
+                    background: rgba(0, 0, 0, 0.6)
+                    &:hover 
+                        background: rgba(0, 0, 0, 1)
+                .close-btn
+                    position: absolute
+                    top: 24px
+                    right: 24px
+                    display: flex
+                    align-items: center
+                    justify-content: center
+                    width: 24px
+                    height: 24px
+                    background-color: #3A3A3C
+                    border-radius: 5px
+                    border-bottom: 2px solid #2B2B2B
+                    cursor: pointer
+                    transition: all .3s
+                    &:hover
+                        background-color: #474748
+                        border-color: #313131
+                        .icon
+                            transform: rotate(90deg)
+                    &:active
+                        background-color: #2B2B2B
+                        border-color: #2B2B2B
+                    .icon
+                        height: 10px
+                        transition: all .3s
+                h2
+                    color: white
+                    font-size: 20px
+                    font-weight: 700
+                    margin-bottom: 16px
+                h3
+                    font-size: 14px
+                    font-weight: 700
+                    color: white
+                    margin-bottom: 12px
+                    margin-top: 8px
+                .active-community-section
+                    width: 100%
+                    margin-bottom: 24px
+                    .community-card
+                        background: #0E0E0F
+                        border-radius: 8px
+                        padding: 16px
+                        &.active
+                            border: 2px solid #3EAA42
+                        .community-header
+                            display: flex
+                            align-items: center
+                            margin-bottom: 12px
+                            .icon
+                                height: 20px
+                                margin-right: 8px
+                            h3
+                                color: white
+                                font-size: 16px
+                                margin: 0
+                        .community-info
+                            margin-bottom: 12px
+                            .community-code
+                                font-size: 13px
+                                color: #8E8E90
+                                strong
+                                    color: #3EAA42
+                                    font-weight: 700
+                                    letter-spacing: 1px
+                        .community-actions
+                            display: flex
+                            gap: 8px
+                            .btn
+                                flex: 1
+                                display: flex
+                                align-items: center
+                                justify-content: center
+                                height: 36px
+                                border-radius: 5px
+                                font-size: 13px
+                                font-weight: 700
+                                cursor: pointer
+                                user-select: none
+                                transition: all .3s
+                                .icon
+                                    height: 12px
+                                    margin-right: 6px
+                                &.share-btn
+                                    background-color: #3EAA42
+                                    border-bottom: 2px solid #157D19
+                                    color: white
+                                    &:hover
+                                        background-color: #44b848
+                                        border-color: #1c9320
+                                    &:active
+                                        background-color: #157D19
+                                        border-color: #157D19
+                                &.leave-btn
+                                    background-color: #3A3A3C
+                                    border-bottom: 2px solid #2B2B2B
+                                    color: white
+                                    &:hover
+                                        background-color: #474748
+                                        border-color: #313131
+                                    &:active
+                                        background-color: #2B2B2B
+                                        border-color: #2B2B2B
+                .join-community-section, .create-community-section
+                    width: 100%
+                    margin-bottom: 24px
+                    .input-group
+                        display: flex
+                        gap: 8px
+                        margin-top: 8px
+                        input
+                            flex: 1
+                            background: #0E0E0F
+                            border: 2px solid #3A3A3C
+                            border-radius: 5px
+                            padding: 0 12px
+                            height: 36px
+                            color: white
+                            font-size: 14px
+                            font-family: Outfit, Avenir, Helvetica, Arial, sans-serif
+                            &:focus
+                                outline: none
+                                border-color: #3EAA42
+                            &::placeholder
+                                color: #8E8E90
+                        .btn
+                            display: flex
+                            align-items: center
+                            justify-content: center
+                            padding: 0 16px
+                            height: 36px
+                            border-radius: 5px
+                            font-size: 13px
+                            font-weight: 700
+                            cursor: pointer
+                            user-select: none
+                            transition: all .3s
+                            white-space: nowrap
+                            .icon
+                                height: 14px
+                                margin-right: 6px
+                            &.join-btn, &.create-submit-btn
+                                background-color: #3EAA42
+                                border-bottom: 2px solid #157D19
+                                color: white
+                                &:hover
+                                    background-color: #44b848
+                                    border-color: #1c9320
+                                &:active
+                                    background-color: #157D19
+                                    border-color: #157D19
+                                &.disabled
+                                    background-color: #2B2B2B
+                                    border-color: #1D1D20
+                                    cursor: not-allowed
+                                    opacity: 0.5
+                            &.create-btn
+                                background-color: #3A3A3C
+                                border-bottom: 2px solid #2B2B2B
+                                color: white
+                                width: 100%
+                                &:hover
+                                    background-color: #474748
+                                    border-color: #313131
+                                &:active
+                                    background-color: #2B2B2B
+                                    border-color: #2B2B2B
+                    .create-form
+                        margin-top: 8px
+                        input
+                            width: 100%
+                            background: #0E0E0F
+                            border: 2px solid #3A3A3C
+                            border-radius: 5px
+                            padding: 0 12px
+                            height: 36px
+                            color: white
+                            font-size: 14px
+                            font-family: Outfit, Avenir, Helvetica, Arial, sans-serif
+                            box-sizing: border-box
+                            margin-bottom: 8px
+                            &:focus
+                                outline: none
+                                border-color: #3EAA42
+                            &::placeholder
+                                color: #8E8E90
+                        .form-actions
+                            display: flex
+                            gap: 8px
+                            .btn
+                                flex: 1
+                                display: flex
+                                align-items: center
+                                justify-content: center
+                                height: 36px
+                                border-radius: 5px
+                                font-size: 13px
+                                font-weight: 700
+                                cursor: pointer
+                                user-select: none
+                                transition: all .3s
+                                &.cancel-btn
+                                    background-color: #3A3A3C
+                                    border-bottom: 2px solid #2B2B2B
+                                    color: white
+                                    &:hover
+                                        background-color: #474748
+                                        border-color: #313131
+                                    &:active
+                                        background-color: #2B2B2B
+                                        border-color: #2B2B2B
+                    .help-text
+                        font-size: 12px
+                        color: #8E8E90
+                        margin-top: 8px
+                .community-help
+                    width: 100%
+                    padding: 12px
+                    background: #0E0E0F
+                    border-radius: 6px
+                    margin-top: 8px
+                    p
+                        font-size: 12px
+                        line-height: 1.4
+                        color: #8E8E90
+                        margin: 0
 
+    .community-badge
+        display: flex
+        align-items: center
+        justify-content: center
+        margin-top: 8px
+        padding: 4px 12px
+        background: #0E0E0F
+        border: 1px solid #3EAA42
+        border-radius: 12px
+        font-size: 11px
+        font-weight: 600
+        color: white
+        .icon
+            height: 10px
+            margin-right: 6px
 
+    .header-left
+        width: 105px !important
+        @media (max-height: 540px)
+            width: 93px !important
 
 @keyframes shake
     0%

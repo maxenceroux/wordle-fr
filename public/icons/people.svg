@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="14" viewBox="0 0 16 14">
+  <g id="people" transform="translate(0 0)">
+    <!-- Left person -->
+    <circle cx="3.5" cy="2.5" r="2" fill="#fff"/>
+    <path d="M0,14 C0,11 1.5,9 3.5,9 C5.5,9 7,11 7,14 Z" fill="#fff"/>
+    
+    <!-- Right person -->
+    <circle cx="12.5" cy="2.5" r="2" fill="#fff"/>
+    <path d="M9,14 C9,11 10.5,9 12.5,9 C14.5,9 16,11 16,14 Z" fill="#fff"/>
+  </g>
+</svg>

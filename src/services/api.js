@@ -87,7 +87,14 @@ class ApiService {
   async saveScore(username, word, tries, timeTaken, date, communityId = null) {
     return this.request("/scores", {
       method: "POST",
-      body: JSON.stringify({ username, word, tries, timeTaken, date, communityId }),
+      body: JSON.stringify({
+        username,
+        word,
+        tries,
+        timeTaken,
+        date,
+        communityId,
+      }),
     });
   }
 
@@ -101,7 +108,9 @@ class ApiService {
   async getLeaderboard(limit = 20, date = null, communityId = null) {
     const dateParam = date ? `&date=${date}` : "";
     const communityParam = communityId ? `&communityId=${communityId}` : "";
-    return this.request(`/leaderboard?limit=${limit}${dateParam}${communityParam}`);
+    return this.request(
+      `/leaderboard?limit=${limit}${dateParam}${communityParam}`
+    );
   }
 
   // Get stats for a date
