@@ -497,6 +497,10 @@ export default {
             gameStartTime: null,
             leaderboard: [],
             leaderboardLoading: false,
+            // Community feature
+            activeCommunityId: null,
+            activeCommunityCode: null,
+            activeCommunityName: null,
         }
     },
     async mounted() {
@@ -519,6 +523,9 @@ export default {
         }).bind(this), 1000)
 
         window.addEventListener('keydown', this.onKeyDown);
+
+        // Check URL for community code (?c=CODE)
+        await this.detectCommunityFromURL();
 
         // Fetch the word of the day first, then initialize/reset the grid
         await this.getWordOfTheDay();
@@ -601,7 +608,7 @@ export default {
                     ? this.archivesDate.format('YYYY-MM-DD')
                     : this.today.format('YYYY-MM-DD');
                 
-                const result = await ApiService.getLeaderboard(10, currentDate);
+                const result = await ApiService.getLeaderboard(10, currentDate, this.activeCommunityId);
                 this.leaderboard = result.leaderboard || [];
             } catch (e) {
                 console.error('Failed to fetch leaderboard:', e);
@@ -730,7 +737,13 @@ export default {
         async getWordOfTheDay() {
             const date = this.archivesMode ? this.archivesDate : this.today;
             const formatedDate = date.format('YYYY-M-D');
-            const seed = seedrandom(formatedDate);
+            
+            // Use community ID in seed for unique words per community
+            const seedString = this.activeCommunityId 
+                ? `${formatedDate}-community-${this.activeCommunityId}`
+                : formatedDate;
+            
+            const seed = seedrandom(seedString);
             const random = seed();
             this.wordOfTheDay = this.words[Math.floor(random * (this.words.indexOf('PIZZA') + 1))];
 
@@ -1157,13 +1170,14 @@ export default {
                 const timeTaken = Math.floor((Date.now() - this.gameStartTime) / 1000);
                 const date = this.today.format('YYYY-MM-DD');
 
-                // Save score to backend
+                // Save score to backend with community ID
                 await ApiService.saveScore(
                     username,
                     this.wordOfTheDay,
                     this.currentAttempt,
                     timeTaken,
-                    date
+                    date,
+                    this.activeCommunityId
                 );
 
                 console.log('Score saved successfully');
@@ -1175,9 +1189,56 @@ export default {
         async syncWordOfDayToBackend() {
             try {
                 const date = this.today.format('YYYY-MM-DD');
-                await ApiService.setWordOfTheDay(date, this.wordOfTheDay);
+                await ApiService.setWordOfTheDay(date, this.wordOfTheDay, this.activeCommunityId);
             } catch (error) {
                 console.error('Failed to sync word of the day:', error);
+            }
+        },
+        async detectCommunityFromURL() {
+            // Check URL for ?c=CODE parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const communityCode = urlParams.get('c');
+            
+            if (communityCode) {
+                await this.loadCommunityFromCode(communityCode);
+            } else {
+                // Load from localStorage if available
+                const savedCode = localStorage.getItem('activeCommunityCode');
+                const savedId = localStorage.getItem('activeCommunityId');
+                const savedName = localStorage.getItem('activeCommunityName');
+                
+                if (savedCode && savedId) {
+                    this.activeCommunityCode = savedCode;
+                    this.activeCommunityId = parseInt(savedId);
+                    this.activeCommunityName = savedName;
+                }
+            }
+        },
+        async loadCommunityFromCode(code) {
+            try {
+                const response = await ApiService.getCommunityByCode(code);
+                const community = response.community;
+                
+                this.activeCommunityId = community.id;
+                this.activeCommunityCode = community.code;
+                this.activeCommunityName = community.name;
+                
+                // Save to localStorage
+                localStorage.setItem('activeCommunityId', community.id);
+                localStorage.setItem('activeCommunityCode', community.code);
+                localStorage.setItem('activeCommunityName', community.name);
+                
+                // Auto-join community if username exists
+                const username = localStorage.getItem('username');
+                if (username) {
+                    await ApiService.joinCommunity(code, username);
+                }
+            } catch (error) {
+                console.error('Failed to load community:', error);
+                // Clear invalid community from localStorage
+                localStorage.removeItem('activeCommunityId');
+                localStorage.removeItem('activeCommunityCode');
+                localStorage.removeItem('activeCommunityName');
             }
         }
     }
