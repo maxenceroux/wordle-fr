@@ -20,7 +20,7 @@ services:
     image: maxenceroux/wordle-fr-frontend:latest
     container_name: wordle-fr-frontend
     ports:
-      - "80:80"
+      - "8080:80"
     environment:
       - VUE_APP_API_URL=/api
     depends_on:
