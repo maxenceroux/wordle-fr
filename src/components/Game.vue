@@ -192,13 +192,46 @@
                                             <img class="icon" src="/icons/skull.svg" alt="Mort" />
                                         </div>
                                         <div class="attempt-stat">
-                                            <div class="attempt-bar" :class="{ best: finished && attempt === currentAttempt}" :style="{ width: `${getAttemptStatPercent(attempt)}%`}">{{ getAttemptStat(attempt) }}</div>
+                                            <div class="attempt-bar" :class="{ best: finished && attempt === currentAttempt}" :style="{ width: `${getAttemptStatPercent(attempt)}%` }">{{ getAttemptStat(attempt) }}</div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
+                            <h2>Leaderboard <span class="leaderboard-date">{{ formatLeaderboardDate() }}</span></h2>
+                            <div class="leaderboard-section">
+                                <div v-if="leaderboardLoading" class="leaderboard-loading">Chargement...</div>
+                                <div v-else-if="leaderboard.length > 0">
+                                    <div class="leaderboard-list">
+                                        <div class="leaderboard-entry" v-for="entry in leaderboard" :key="entry.id">
+                                            <div class="leaderboard-rank">#{{ entry.rank }}</div>
+                                            <div class="leaderboard-details">
+                                                <div class="leaderboard-username">{{ entry.username }}</div>
+                                                <div class="leaderboard-meta">{{ entry.tries }} {{ entry.tries === 1 ? 'essai' : 'essais' }} • {{ formatTime(entry.timeTaken) }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="leaderboard-empty">Aucune partie jouée ce jour</div>
+                            </div>
                         </template>
-                        <template v-else>Les stats ne sont ni visibles ni changées en mode Archive.</template>
+                        <template v-else>
+                            <h2>Leaderboard <span class="leaderboard-date">{{ formatLeaderboardDate() }}</span></h2>
+                            <div class="leaderboard-section">
+                                <div v-if="leaderboardLoading" class="leaderboard-loading">Chargement...</div>
+                                <div v-else-if="leaderboard.length > 0">
+                                    <div class="leaderboard-list">
+                                        <div class="leaderboard-entry" v-for="entry in leaderboard" :key="entry.id">
+                                            <div class="leaderboard-rank">#{{ entry.rank }}</div>
+                                            <div class="leaderboard-details">
+                                                <div class="leaderboard-username">{{ entry.username }}</div>
+                                                <div class="leaderboard-meta">{{ entry.tries }} {{ entry.tries === 1 ? 'essai' : 'essais' }} • {{ formatTime(entry.timeTaken) }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="leaderboard-empty">Aucune partie jouée ce jour</div>
+                            </div>
+                        </template>
                         <div class="soluce" v-if="finished">
                             <div class="subtitle">Le mot était</div>
                             <h2>{{ wordOfTheDay }}</h2>
@@ -333,13 +366,28 @@
                     </div>
                 </div>
             </transition>
+            <transition name="fadeup">
+                <div class="leaderboard-modal" v-if="leaderboardOpened">
+                    <div class="modal-backdrop" @click="leaderboardOpened = false"></div>
+                    <div class="leaderboard-modal-content">
+                        <div class="close-btn" @click="leaderboardOpened = false">
+                            <img class="icon" src="/icons/close.svg" alt="Fermer" />
+                        </div>
+                        <h2>Classement</h2>
+                        <div class="leaderboard-content">
+                            <p>Chargement...</p>
+                        </div>
+                    </div>
+                </div>
+            </transition>
         </main>
     </div>
 </template>
 
 <script>
 import * as seedrandom from 'seedrandom';
-import moment from 'moment-timezone';
+// Use the bundled build of moment-timezone that includes timezone data
+import moment from 'moment-timezone/builds/moment-timezone-with-data-10-year-range';
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
 import 'vue2-datepicker/locale/fr';
@@ -348,6 +396,7 @@ import LetterContainer from "./grid/LetterContainer.vue";
 import Key from "./keyboard/Key.vue";
 import words from "../assets/json/drawable-words.json";
 import playableWords from "../assets/json/playable-words.json";
+import ApiService from "../services/api.js";
 
 moment.locale('fr')
 moment.tz.setDefault('Europe/Paris')
@@ -444,9 +493,13 @@ export default {
                 bestStreak: 0,
                 games: [],
             },
+            username: null,
+            gameStartTime: null,
+            leaderboard: [],
+            leaderboardLoading: false,
         }
     },
-    mounted() {
+    async mounted() {
         if (localStorage.getItem('lastClosedPromo') !== 'le-mot-classique') {
             this.promoOpened = true;
         }
@@ -467,12 +520,12 @@ export default {
 
         window.addEventListener('keydown', this.onKeyDown);
 
-        for (let i = 0; i < NB_ATTEMPTS; i++) {
-            this.attempts.push([]);
-            this.results.push(new Array(5));
-        }
-        this.getWordOfTheDay();
+        // Fetch the word of the day first, then initialize/reset the grid
+        await this.getWordOfTheDay();
+        this.resetGridData();
         this.getSavedData();
+        this.loadUsername();
+        this.gameStartTime = Date.now();
 
         if (localStorage.getItem('sharedLink')) {
             this.sharedLink = JSON.parse(localStorage.getItem('sharedLink'));
@@ -510,19 +563,69 @@ export default {
         keyboard() {
             this.setLSItem('keyboard', JSON.stringify(this.keyboard));
         },
-        archivesMode() {
-            this.getWordOfTheDay()
-            if (!this.archivesMode) {
-                this.getSavedData();
-            } else {
-                this.resetGridData();
+        statsOpened(newVal) {
+            if (newVal) {
+                this.fetchLeaderboard();
             }
+        },
+        archivesDate() {
+            // Refresh leaderboard when archive date changes and stats are open
+            if (this.statsOpened && this.archivesMode) {
+                this.fetchLeaderboard();
+            }
+        },
+        archivesMode() {
+            // When switching archives mode, fetch the relevant word first
+            this.getWordOfTheDay().then(() => {
+                if (!this.archivesMode) {
+                    this.getSavedData();
+                } else {
+                    this.resetGridData();
+                }
+            }).catch(() => {
+                // Fallback behavior
+                if (!this.archivesMode) {
+                    this.getSavedData();
+                } else {
+                    this.resetGridData();
+                }
+            });
         },
     },
     methods: {
+        async fetchLeaderboard() {
+            this.leaderboardLoading = true;
+            try {
+                // Use archive date if in archives mode, otherwise use today
+                const currentDate = this.archivesMode 
+                    ? this.archivesDate.format('YYYY-MM-DD')
+                    : this.today.format('YYYY-MM-DD');
+                
+                const result = await ApiService.getLeaderboard(10, currentDate);
+                this.leaderboard = result.leaderboard || [];
+            } catch (e) {
+                console.error('Failed to fetch leaderboard:', e);
+                this.leaderboard = [];
+            }
+            this.leaderboardLoading = false;
+        },
+        formatTime(seconds) {
+            if (seconds == null || seconds === 0) return '-';
+            const min = Math.floor(seconds / 60);
+            const sec = seconds % 60;
+            return min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+        },
+        formatLeaderboardDate() {
+            if (this.archivesMode) {
+                return `(${this.formatDate(this.archivesDate)})`;
+            }
+            return "(Aujourd'hui)";
+        },
         onKeyDown() {
             if (/^[a-zA-Z]$/.test(event.key)) {
                 this.handleKeyClick(event.key.toUpperCase());
+            } else if (event.key === '?') {
+                this.handleKeyClick('?');
             } else if (event.key === 'Enter') {
                 this.handleKeyClick('Entrer');
             } else if (event.key === 'Backspace') {
@@ -559,6 +662,14 @@ export default {
             for (let i = 0; i < NB_ATTEMPTS; i++) {
                 this.attempts.push([]);
                 this.results.push(new Array(5));
+            }
+
+            // Prefill the first letter of the word of the day (if available) into the first attempt
+            if (this.wordOfTheDay && this.wordOfTheDay.length >= 1) {
+                const firstLetter = this.wordOfTheDay[0];
+                // Ensure first attempt array has at least one slot
+                if (!this.attempts[0]) this.attempts[0] = [];
+                this.attempts[0][0] = firstLetter;
             }
 
         },
@@ -627,6 +738,11 @@ export default {
                 this.wordOfTheDay = 'DROIT';
             } else if (formatedDate === '2023-5-12') { // 🧑‍🎓
                 this.wordOfTheDay = 'FAIRE';
+            }
+
+            // Sync word of the day to backend (only for current day, not archives)
+            if (!this.archivesMode) {
+                await this.syncWordOfDayToBackend();
             }
         },
         canChangeArchivesDate (nbDays) {
@@ -735,12 +851,23 @@ export default {
                     this.attempts[this.currentAttempt - 1].pop();
                 }
             } else if (this.attempts[this.currentAttempt - 1].length < NB_LETTERS) {
-                this.attempts[this.currentAttempt - 1].push(key);
+                // Allow entering '?' as a letter
+                if (/^[A-Z]$/.test(key) || key === '?') {
+                    this.attempts[this.currentAttempt - 1].push(key);
+                }
             }
             this.setLSItem('attempts', JSON.stringify(this.attempts));
         },
         verifyWord(attempt) {
             if (attempt.length === NB_LETTERS) {
+                // Block validation if any letter is '?'
+                if (attempt.includes('?')) {
+                    this.error = 'Remplacez tous les points d\'interrogation avant de valider.';
+                    window.setTimeout(() => {
+                        this.error = '';
+                    }, 1200);
+                    return;
+                }
                 if (this.words.includes(attempt.join('')) || playableWords.includes(attempt.join(''))) {
                     this.verifyLetters(attempt);
                 } else {
@@ -810,11 +937,13 @@ export default {
             this.setLSItem('won', JSON.stringify(this.won));
             this.setLSItem('finished', JSON.stringify(this.finished));
         },
-        computeStats() {
+        async computeStats() {
             let games = this.userResults.games;
             let todaysGame = games.find((game) => game.date === this.today.format('YYYY-M-D'));
 
             if(!todaysGame) {
+                // Save score to backend
+                await this.saveScoreToBackend();
                 let yesterday = this.today.clone().subtract(1, 'day');
                 let yesterdaysGame = games.find(game => game.date === yesterday.format('YYYY-M-D'));
                 let isStreak = Boolean(yesterdaysGame && yesterdaysGame.won);
@@ -994,6 +1123,62 @@ export default {
         closePromo() {
             this.promoOpened = false;
             this.setLSItem('lastClosedPromo', 'le-mot-classique');
+        },
+        loadUsername() {
+            // Load username from localStorage (cached)
+            const cachedUsername = localStorage.getItem('username');
+            if (cachedUsername) {
+                this.username = cachedUsername;
+            }
+        },
+        async promptForUsername() {
+            // Prompt user for username if not cached
+            if (!this.username) {
+                const username = prompt('Entrez votre nom d\'utilisateur pour sauvegarder votre score:');
+                if (username && username.trim()) {
+                    this.username = username.trim();
+                    localStorage.setItem('username', this.username);
+                    return this.username;
+                }
+                return null;
+            }
+            return this.username;
+        },
+        async saveScoreToBackend() {
+            try {
+                // Get username (prompt if not cached)
+                const username = await this.promptForUsername();
+                if (!username) {
+                    console.log('Score not saved: no username provided');
+                    return;
+                }
+
+                // Calculate time taken in seconds
+                const timeTaken = Math.floor((Date.now() - this.gameStartTime) / 1000);
+                const date = this.today.format('YYYY-MM-DD');
+
+                // Save score to backend
+                await ApiService.saveScore(
+                    username,
+                    this.wordOfTheDay,
+                    this.currentAttempt,
+                    timeTaken,
+                    date
+                );
+
+                console.log('Score saved successfully');
+            } catch (error) {
+                console.error('Failed to save score:', error);
+                // Don't block the UI if score saving fails
+            }
+        },
+        async syncWordOfDayToBackend() {
+            try {
+                const date = this.today.format('YYYY-MM-DD');
+                await ApiService.setWordOfTheDay(date, this.wordOfTheDay);
+            } catch (error) {
+                console.error('Failed to sync word of the day:', error);
+            }
         }
     }
 }
@@ -1501,6 +1686,71 @@ export default {
                                     border-radius: 3px
                                     &.best
                                         background: #3EAA42
+                .leaderboard-date
+                    font-size: 14px
+                    font-weight: 400
+                    color: rgba(255, 255, 255, 0.6)
+                    margin-left: 6px
+                .leaderboard-section
+                    width: 100%
+                    display: flex
+                    flex-direction: column
+                    margin-top: 4px
+                    .leaderboard-loading, .leaderboard-empty
+                        text-align: center
+                        color: rgba(255, 255, 255, 0.5)
+                        font-size: 12px
+                        padding: 16px 0
+                        font-style: italic
+                    .leaderboard-list
+                        width: 100%
+                        display: flex
+                        flex-direction: column
+                        gap: 4px
+                        .leaderboard-entry
+                            display: flex
+                            align-items: center
+                            padding: 10px 8px
+                            border-radius: 4px
+                            background: rgba(255, 255, 255, 0.03)
+                            transition: background 0.2s ease
+                            &:hover
+                                background: rgba(255, 255, 255, 0.06)
+                            &:first-child
+                                .leaderboard-rank
+                                    color: #FFD700
+                            &:nth-child(2)
+                                .leaderboard-rank
+                                    color: #C0C0C0
+                            &:nth-child(3)
+                                .leaderboard-rank
+                                    color: #CD7F32
+                            .leaderboard-rank
+                                width: 36px
+                                font-size: 13px
+                                font-weight: 700
+                                color: #3EAA42
+                                flex-shrink: 0
+                                text-align: left
+                            .leaderboard-details
+                                flex: 1
+                                display: flex
+                                flex-direction: column
+                                overflow: hidden
+                                min-width: 0
+                                .leaderboard-username
+                                    font-size: 13px
+                                    font-weight: 600
+                                    color: white
+                                    overflow: hidden
+                                    text-overflow: ellipsis
+                                    white-space: nowrap
+                                    line-height: 1.3
+                                .leaderboard-meta
+                                    font-size: 11px
+                                    color: rgba(255, 255, 255, 0.55)
+                                    margin-top: 3px
+                                    line-height: 1.2
                 .soluce
                     &.special
                         h2
@@ -1827,6 +2077,7 @@ export default {
                         height: 10px
                         transition: all .3s
                 h2
+                   
                     color: white
                     font-size: 20px
                     font-weight: 700

@@ -6,6 +6,31 @@ The idea, the concept and the design were, for the most part, taken from the ori
 
 You can find Le Mot at this URL : [wordle.louan.me](https://wordle.louan.me)
 
+## 🐳 Docker Setup (NEW!)
+
+This project now includes full Docker support with SQLite persistence for scores and word of the day!
+
+### Quick Start with Docker
+
+```bash
+# Start the application
+./start.sh
+
+# Or manually with docker-compose
+docker-compose up -d
+```
+
+**Access the app at:** http://localhost
+
+For detailed Docker documentation, see [README_DOCKER.md](README_DOCKER.md)
+
+### Features
+- ✅ SQLite database for persistent score tracking
+- ✅ Username-based score system with local caching
+- ✅ Word of the day storage
+- ✅ Leaderboard and statistics API
+- ✅ Full Docker containerization
+
 ## Contacts
 
 [@louanben](https://twitter.com/louanben) on Twitter

@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Backend service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wordle-fr-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DB_PATH=/app/data/wordle.db
+      - NODE_ENV=production
+    volumes:
+      - backend-data:/app/data
+    networks:
+      - wordle-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend service
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wordle-fr-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VUE_APP_API_URL=/api
+    depends_on:
+      - backend
+    networks:
+      - wordle-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  backend-data:
+    driver: local
+
+networks:
+  wordle-network:
+    driver: bridge
