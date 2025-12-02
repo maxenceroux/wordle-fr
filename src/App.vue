@@ -1,24 +1,16 @@
 <template>
   <div id="app">
-    <PromoBookClassic v-if="onBookClassic" @goBackToGame="onBookClassic = false"/>
-    <Game v-else @goToBookClassic="onBookClassic = true"/>
+    <Game />
   </div>
 </template>
 
 <script>
 import Game from './components/Game.vue';
-import PromoBookClassic from './components/PromoBookClassic.vue';
 
 export default {
   name: 'App',
   components: {
     Game,
-    PromoBookClassic,
-  },
-  data() {
-    return {
-      onBookClassic: false,
-    }
   },
   mounted() {
     let lastCacheCheck = 0;

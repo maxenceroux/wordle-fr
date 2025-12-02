@@ -49,9 +49,6 @@
                         <img class="icon" src="/icons/help.svg" alt="Aide" />
                     </div>
                 </div>
-                <div class="announcement-cta" @click="promoOpened = true" title="Annonce">
-                    <img class="icon" src="/icons/book.svg" alt="Annonce" />
-                </div>
             </div>
         </header>
         <main>
@@ -261,12 +258,6 @@
                                 </div>
                             </div>
                             <div class="ctas">
-                                <a href="https://www.marabout.com/auteur/louan-bengmah/" target="_blank" class="btn large-btn">
-                                    <img class="icon" src="/icons/book.svg" />
-                                    <p>Découvrir les livres Le Mot</p>
-                                </a>
-                            </div>
-                            <div class="ctas">
                                 <a href="https://ko-fi.com/louanben" target="_blank" class="btn large-btn">
                                     <img class="icon" src="/icons/heart.svg" />
                                     <p>Soutenir l'auteur du projet</p>
@@ -350,33 +341,6 @@
                                     <strong>WordleFR</strong> est un projet <a href="https://github.com/louanben/wordle-fr" target="_blank">open-source</a>.
                                 </p>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </transition>
-            <transition name="fadeup">
-                <div class="promo-modal" v-if="promoOpened">
-                    <div class="modal-backdrop" @click="closePromo">
-                    </div>
-                    <div class="promo-modal-content">
-                        <div class="close-btn" @click="closePromo">
-                            <img class="icon" src="/icons/close.svg" alt="Fermer" />
-                        </div>
-                        <h2>Le Mot arrive en librairie !</h2>
-                        <div class="promo-images">
-                            <img class="promo-image" src="/img/le-mot-classique.png" alt="Le Mot - Version Classique" />
-                            <img class="promo-image" src="/img/le-mot-extreme.png" alt="Le Mot - Version Extrême" />
-                        </div>
-                        <p>
-                            Retrouvez tout le plaisir du jeu en version papier avec la <b>Version Classique</b>, 
-                            et relevez un défi encore plus corsé avec la <b>Version Extrême</b>&nbsp;! 
-                        </p>
-                        <p>
-                            130 grilles inédites par livre pour tester votre logique et votre déduction, où que vous soyez.
-                        </p>
-                        <div class="ctas">
-                            <input @click="closePromo" type="button" value="Fermer" class="btn">
-                            <input @click="goToBookClassic" type="button" value="Découvrir" class="btn discover-btn">
                         </div>
                     </div>
                 </div>
@@ -571,7 +535,6 @@ export default {
             statsOpened: false,
             settingsOpened: false,
             helpOpened: false,
-            promoOpened: false,
             colorBlindMode: false,
             sharedLink: true,
             webShare: false,
@@ -611,10 +574,6 @@ export default {
         }
     },
     async mounted() {
-        if (localStorage.getItem('lastClosedPromo') !== 'le-mot-classique') {
-            this.promoOpened = true;
-        }
-
         let checkBeta = () => window.location.hash.toLowerCase() === '#beta'
         this.isBetaEnabled = checkBeta()
         
@@ -1235,14 +1194,6 @@ export default {
         changeCopiedStatus() {
             this.resultsCopied = true;
             setTimeout(() => (this.resultsCopied = false), 10000);
-        },
-        goToBookClassic() {
-            this.setLSItem('lastClosedPromo', 'le-mot-classique');
-            this.$emit('goToBookClassic');
-        },
-        closePromo() {
-            this.promoOpened = false;
-            this.setLSItem('lastClosedPromo', 'le-mot-classique');
         },
         loadUsername() {
             // Load username from localStorage (cached)
