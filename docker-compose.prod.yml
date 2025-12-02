@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    image: maxenceroux/wordle-fr-backend:latest
+    container_name: wordle-fr-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DB_PATH=/app/data/wordle.db
+      - NODE_ENV=production
+    volumes:
+      - backend-data:/app/data
+    networks:
+      - wordle-network
+    restart: unless-stopped
+
+  frontend:
+    image: maxenceroux/wordle-fr-frontend:latest
+    container_name: wordle-fr-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VUE_APP_API_URL=/api
+    depends_on:
+      - backend
+    networks:
+      - wordle-network
+    restart: unless-stopped
+
+volumes:
+  backend-data:
+    driver: local
+
+networks:
+  wordle-network:
+    driver: bridge
